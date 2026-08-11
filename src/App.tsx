@@ -61,7 +61,7 @@ function EmergencyLinesPage({ close, coordinates }: { close: () => void; coordin
   const directory=emergencyDirectories.find(item=>item.id===region)??emergencyDirectories[0]
   return <main className="form-page emergency-page"><button className="back" onClick={close}><ArrowLeft/> Volver</button><span className="section-kicker">DIRECTORIO TERRITORIAL</span><h1>Líneas de emergencia</h1><p>Los números pueden cambiar según la ciudad. Selecciona tu territorio y llama solamente si necesitas atención real.</p>
     <label>Territorio<select value={region} onChange={event=>setRegion(event.target.value)}>{emergencyDirectories.map(item=><option value={item.id} key={item.id}>{item.label} · {item.department}</option>)}</select></label>
-    <div className="emergency-list">{directory.lines.map(line=><a className={line.primary?'primary-line':''} href={`tel:${line.number}`} key={`${directory.id}-${line.number}`}><span><b>{line.name}</b><small>{line.purpose}</small></span><strong>{line.number}</strong></a>)}</div>
+    {directory.coverageNote&&<div className="coverage-note"><CircleHelp/>{directory.coverageNote}</div>}<div className="emergency-list">{directory.lines.map(line=><a className={line.primary?'primary-line':''} href={`tel:${line.number.replace(/\s/g,'')}`} key={`${directory.id}-${line.name}-${line.number}`}><span><b>{line.name}</b><small>{line.purpose}</small></span><strong>{line.number}</strong></a>)}</div>
     <div className="public-note emergency-source"><ShieldCheck/><div><b>Información territorial verificada</b><p>Revisada el {new Date(`${directory.verifiedAt}T12:00:00`).toLocaleDateString('es-CO')}. <a href={directory.sourceUrl} target="_blank" rel="noreferrer">Consultar fuente oficial</a>.</p></div></div>
   </main>
 }
