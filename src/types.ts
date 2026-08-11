@@ -80,3 +80,20 @@ export interface ApiSafetyCheckIn {
   updatedAt: string
   deleteToken?: string
 }
+
+export interface CitizenAction {
+  id:string
+  title:string
+  contactName:string
+  contactPhone:string
+  actionDescription:string
+  donationMethod?:string
+  departmentName:string
+  municipalityName:string
+  locality?:string
+  status:'pending'|'published'
+  validationExpiresAt:string
+  consentedAt?:string
+  createdAt:string
+  updatedAt:string
+}

@@ -1,4 +1,4 @@
-import type { ApiIncident, ApiIncidentDetail, ApiLocation, ApiMissingPerson, ApiSafetyCheckIn, AreaPoint, IncidentEvidence, ReportKind } from '../types'
+import type { ApiIncident, ApiIncidentDetail, ApiLocation, ApiMissingPerson, ApiSafetyCheckIn, AreaPoint, CitizenAction, IncidentEvidence, ReportKind } from '../types'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 export const incidentStreamUrl = `${API_BASE_URL}/incidents/stream`
@@ -25,6 +25,11 @@ export const api = {
     longitude: number; latitude: number; peopleAtRisk?: number
   }) => request<ApiIncident>('/incidents', { method: 'POST', body: JSON.stringify(payload) }),
   adminCreateIncident:(token:string,payload:{kind:ReportKind;title:string;description:string;location:ApiLocation;longitude:number;latitude:number;peopleAtRisk?:number;area?:AreaPoint[]})=>request<ApiIncident>('/admin/incidents',{method:'POST',headers:{Authorization:`Bearer ${token}`},body:JSON.stringify(payload)}),
+  citizenActions:()=>request<CitizenAction[]>('/citizen-actions'),
+  citizenAction:(id:string)=>request<CitizenAction>(`/citizen-actions/${id}`),
+  citizenActionValidation:(token:string)=>request<CitizenAction>(`/citizen-actions/validate/${encodeURIComponent(token)}`),
+  validateCitizenAction:(token:string,decision:'accept'|'decline')=>request<{status:string;published:boolean;id?:string}>(`/citizen-actions/validate/${encodeURIComponent(token)}`,{method:'POST',body:JSON.stringify({decision})}),
+  adminCreateCitizenAction:(token:string,payload:{title:string;contactName:string;contactPhone:string;actionDescription:string;donationMethod?:string;departmentName:string;municipalityName:string;locality?:string})=>request<{actionId:string;status:string;validationExpiresAt:string;validationUrl:string}>('/admin/citizen-actions',{method:'POST',headers:{Authorization:`Bearer ${token}`},body:JSON.stringify(payload)}),
   evidenceUploadUrl:(incidentId:string,file:Blob)=>request<{id:string;uploadUrl:string;expiresAt:string}>(`/incidents/${incidentId}/evidence/upload-url`,{method:'POST',body:JSON.stringify({mimeType:file.type,sizeBytes:file.size})}),
   completeEvidence:(incidentId:string,id:string)=>request<IncidentEvidence>(`/incidents/${incidentId}/evidence/${id}/complete`,{method:'POST'}),
   people: (query = '') => request<ApiMissingPerson[]>(`/missing-persons${query ? `?q=${encodeURIComponent(query)}` : ''}`),
