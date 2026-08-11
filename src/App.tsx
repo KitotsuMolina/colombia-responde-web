@@ -83,7 +83,9 @@ function Header({ onHome, onEmergency, online }: { onHome: () => void; onEmergen
 }
 
 const tickerMessage=<><b>Información ciudadana:</b> En Capri se reporta alta presencia de ayuda. Si quieres colaborar y es seguro desplazarte, consulta en el mapa los otros puntos de ayuda urgente y confirma sus necesidades antes de salir.</>
-function InfoTicker(){return <aside className="info-ticker" role="status" aria-label="Información ciudadana"><div className="info-ticker-track"><span>{tickerMessage}</span><span aria-hidden="true">{tickerMessage}</span></div></aside>}
+const childSafetyMessage=<><b>Protección de niñas y niños:</b> No permitas que una persona sin identificación clara se lleve a un menor. Verifica su parentesco o autorización con los responsables del punto y, ante cualquier duda, informa inmediatamente a las autoridades.</>
+function TickerLine({message,className='',label}:{message:React.ReactNode;className?:string;label:string}){return <aside className={`info-ticker ${className}`} role="status" aria-label={label}><div className="info-ticker-track"><span>{message}</span><span aria-hidden="true">{message}</span></div></aside>}
+function InfoTicker(){return <><TickerLine message={tickerMessage} label="Información ciudadana"/><TickerLine message={childSafetyMessage} label="Alerta de protección infantil" className="child-safety-ticker"/></>}
 
 function EmergencyLinesPage({ close, coordinates }: { close: () => void; coordinates?: Coordinates }) {
   const suggested=coordinates?directoryForCoordinates(coordinates.latitude,coordinates.longitude):'national'
