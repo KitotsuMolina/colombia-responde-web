@@ -1,5 +1,6 @@
 export type ReportKind = 'help' | 'damage' | 'landslide' | 'road' | 'water' | 'power' | 'medical' | 'shelter' | 'aid'
 export type Verification = 'unverified' | 'evidence' | 'community' | 'verified' | 'official'
+export interface AreaPoint { latitude:number;longitude:number }
 
 export interface ApiLocation {
   departmentCode?: string
@@ -16,6 +17,7 @@ export interface ApiIncident {
   description: string
   location: ApiLocation
   coordinates: { type: 'Point'; coordinates: [number, number] }
+  area?: AreaPoint[]
   peopleAtRisk?: number
   verificationStatus: Verification
   confirmationCount: number
@@ -38,6 +40,7 @@ export interface Incident {
   people?: number
   latitude: number
   longitude: number
+  area?: AreaPoint[]
 }
 export interface IncidentEvidence { id:string;url:string;mimeType:string;sizeBytes:number;createdAt:string }
 export interface ApiIncidentDetail extends ApiIncident { evidence:IncidentEvidence[] }
