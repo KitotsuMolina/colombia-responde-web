@@ -23,6 +23,7 @@ export const api = {
     kind: ReportKind; title: string; description: string; location: ApiLocation
     longitude: number; latitude: number; peopleAtRisk?: number
   }) => request<ApiIncident>('/incidents', { method: 'POST', body: JSON.stringify(payload) }),
+  adminCreateIncident:(token:string,payload:{kind:ReportKind;title:string;description:string;location:ApiLocation;longitude:number;latitude:number;peopleAtRisk?:number})=>request<ApiIncident>('/admin/incidents',{method:'POST',headers:{Authorization:`Bearer ${token}`},body:JSON.stringify(payload)}),
   evidenceUploadUrl:(incidentId:string,file:Blob)=>request<{id:string;uploadUrl:string;expiresAt:string}>(`/incidents/${incidentId}/evidence/upload-url`,{method:'POST',body:JSON.stringify({mimeType:file.type,sizeBytes:file.size})}),
   completeEvidence:(incidentId:string,id:string)=>request<IncidentEvidence>(`/incidents/${incidentId}/evidence/${id}/complete`,{method:'POST'}),
   people: (query = '') => request<ApiMissingPerson[]>(`/missing-persons${query ? `?q=${encodeURIComponent(query)}` : ''}`),
