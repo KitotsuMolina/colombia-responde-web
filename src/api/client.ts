@@ -1,4 +1,4 @@
-import type { ApiIncident, ApiLocation, ApiMissingPerson, ReportKind } from '../types'
+import type { ApiIncident, ApiLocation, ApiMissingPerson, ApiSafetyCheckIn, ReportKind } from '../types'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 
@@ -27,4 +27,8 @@ export const api = {
     fullName: string; age?: number; location: ApiLocation; lastSeenAt: string
     lastSeenDetails: string; contactToken: string
   }) => request<ApiMissingPerson>('/missing-persons', { method: 'POST', body: JSON.stringify(payload) }),
+  safetyCheckIns: (query = '') => request<ApiSafetyCheckIn[]>(`/safety-check-ins${query ? `?q=${encodeURIComponent(query)}` : ''}`),
+  createSafetyCheckIn: (payload: { fullName: string; location: ApiLocation; message?: string; longitude?: number; latitude?: number }) =>
+    request<ApiSafetyCheckIn>('/safety-check-ins', { method: 'POST', body: JSON.stringify(payload) }),
+  removeSafetyCheckIn: (id: string, deleteToken: string) => request<{ removed: boolean }>(`/safety-check-ins/${id}`, { method: 'DELETE', body: JSON.stringify({ deleteToken }) }),
 }

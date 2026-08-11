@@ -3,9 +3,9 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, CircleHelp, Clock3
 import { api } from './api/client'
 import { divIcon } from 'leaflet'
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
-import type { ApiIncident, ApiLocation, ApiMissingPerson, Incident, MissingPerson, ReportKind } from './types'
+import type { ApiIncident, ApiLocation, ApiMissingPerson, ApiSafetyCheckIn, Incident, MissingPerson, ReportKind } from './types'
 
-type View = 'home' | 'report' | 'people'
+type View = 'home' | 'report' | 'people' | 'safety'
 type Coordinates = { latitude: number; longitude: number }
 
 const kindMeta: Record<ReportKind, { label: string; icon: typeof Siren; tone: string }> = {
@@ -39,13 +39,10 @@ function Header({ onHome, online }: { onHome: () => void; online: boolean }) {
 }
 
 function Hero({ setView }: { setView: (v: View) => void }) {
-  const [safe, setSafe] = useState(() => localStorage.getItem('colombia-responde-safe') === 'true')
-  const markSafe = () => { localStorage.setItem('colombia-responde-safe', 'true'); setSafe(true) }
   return <section className="hero"><div className="eyebrow"><span className="pulse"/> RED CIUDADANA DE EMERGENCIA</div><h1>Ayuda que encuentra<br/><em>a quien la necesita.</em></h1>
     <p>Reporta emergencias, encuentra personas y consulta recursos disponibles en todo Colombia.</p><div className="hero-actions">
       <button className="primary danger" onClick={() => setView('report')}><Siren/> Necesito ayuda</button>
-      <button className="primary safe" onClick={markSafe}><CheckCircle2/> {safe ? 'Estado guardado' : 'Estoy bien'}</button></div>
-    {safe && <p className="inline-success">Tu estado quedó guardado en este dispositivo.</p>}
+      <button className="primary safe" onClick={() => setView('safety')}><CheckCircle2/> Estoy bien</button></div>
   </section>
 }
 
@@ -68,6 +65,18 @@ function LocationFields({ value, onChange, coordinates, setCoordinates }: { valu
   const locate = () => navigator.geolocation?.getCurrentPosition(p => setCoordinates?.({ latitude:p.coords.latitude, longitude:p.coords.longitude }), () => alert('No fue posible obtener la ubicación. Revisa los permisos del navegador.'))
   const field = (key: keyof ApiLocation, placeholder: string, maxLength?: number) => <input required value={value[key] || ''} maxLength={maxLength} placeholder={placeholder} onChange={e => onChange({ ...value, [key]:e.target.value })}/>
   return <div className="location-fields"><div>{field('departmentName','Departamento')}{field('departmentCode','Código DANE (2 dígitos)',2)}</div><div>{field('municipalityName','Municipio o distrito')}{field('municipalityCode','Código DANE (5 dígitos)',5)}</div>{field('locality','Barrio, vereda o localidad')}{setCoordinates&&<button type="button" className="outline full" onClick={locate}><Navigation/> {coordinates ? `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}` : 'Capturar ubicación GPS'}</button>}</div>
+}
+
+function SafetyPage({ close }: { close: () => void }) {
+  const [mode,setMode]=useState<'create'|'search'>('create'),[fullName,setFullName]=useState(''),[location,setLocation]=useState<ApiLocation>(blankLocation),[message,setMessage]=useState(''),[coordinates,setCoordinates]=useState<Coordinates>(),[sending,setSending]=useState(false),[error,setError]=useState(''),[created,setCreated]=useState<ApiSafetyCheckIn>(),[query,setQuery]=useState(''),[results,setResults]=useState<ApiSafetyCheckIn[]>([])
+  const submit=async(e:FormEvent)=>{e.preventDefault();setSending(true);setError('');try{const item=await api.createSafetyCheckIn({fullName,location,message:message||undefined,latitude:coordinates?.latitude,longitude:coordinates?.longitude});setCreated(item);if(item.deleteToken)localStorage.setItem(`safety-delete-${item.id}`,item.deleteToken)}catch(err){setError(err instanceof Error?err.message:'No fue posible confirmar tu estado')}finally{setSending(false)}}
+  const search=async(e:FormEvent)=>{e.preventDefault();setSending(true);setError('');try{setResults(await api.safetyCheckIns(query))}catch(err){setError(err instanceof Error?err.message:'No fue posible buscar')}finally{setSending(false)}}
+  const remove=async(item:ApiSafetyCheckIn)=>{const token=localStorage.getItem(`safety-delete-${item.id}`);if(!token)return;await api.removeSafetyCheckIn(item.id,token);localStorage.removeItem(`safety-delete-${item.id}`);setResults(current=>current.filter(result=>result.id!==item.id))}
+  if(created)return <main className="form-page success-page"><CheckCircle2/><h1>{created.fullName} está bien</h1><p>Confirmación autodeclarada registrada. Comparte este código para que puedan encontrarte sin publicar tu ubicación exacta.</p><b>{created.publicCode}</b><p>{created.location.municipalityName} · {created.location.departmentName}<br/>{new Date(created.createdAt).toLocaleString('es-CO')}</p><button className="primary safe full" onClick={()=>{setQuery(created.publicCode);setMode('search');setCreated(undefined)}}>Consultar confirmación</button><button className="back" onClick={close}>Volver al inicio</button></main>
+  return <main className="form-page safety-page"><button className="back" onClick={close}><ArrowLeft/> Volver</button><span className="section-kicker">CONFIRMACIÓN DE SEGURIDAD</span><h1>{mode==='create'?'Informar que estás bien':'Buscar confirmación'}</h1><div className="mode-tabs"><button className={mode==='create'?'active':''} onClick={()=>setMode('create')}>Estoy bien</button><button className={mode==='search'?'active':''} onClick={()=>setMode('search')}>Buscar a alguien</button></div>
+    {mode==='create'?<form onSubmit={submit}><p>Publicaremos tu nombre, municipio, hora y mensaje. Las coordenadas exactas no se muestran.</p><label>Nombre completo<input required minLength={3} maxLength={180} value={fullName} onChange={e=>setFullName(e.target.value)}/></label><label>Ubicación aproximada<LocationFields value={location} onChange={setLocation} coordinates={coordinates} setCoordinates={setCoordinates}/></label><label>Mensaje opcional<textarea maxLength={500} rows={3} value={message} onChange={e=>setMessage(e.target.value)} placeholder="Estoy con mi familia y en un lugar seguro."/></label><div className="privacy"><ShieldCheck/><p><b>Confirmación autodeclarada</b><br/>Caduca automáticamente en 30 días. Conservaremos en este dispositivo un token para eliminarla.</p></div>{error&&<p className="form-error">{error}</p>}<button disabled={sending} className="primary safe full">{sending?<><LoaderCircle/> Guardando…</>:'Confirmar que estoy bien'}</button></form>
+    :<><form onSubmit={search}><div className="searchbox"><Search/><input required minLength={2} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Nombre o código BIEN-…"/></div><button disabled={sending} className="primary safe full">{sending?'Buscando…':'Buscar confirmación'}</button></form>{error&&<p className="form-error">{error}</p>}<div className="safety-results">{results.map(item=><article className="safety-result" key={item.id}><CheckCircle2/><div><h3>{item.fullName} está bien</h3><p>{item.location.municipalityName} · {item.location.departmentName}</p><small>{new Date(item.createdAt).toLocaleString('es-CO')} · {item.status==='verified'?'Verificada':'Autodeclarada'} · {item.publicCode}</small>{item.message&&<blockquote>{item.message}</blockquote>}</div>{localStorage.getItem(`safety-delete-${item.id}`)&&<button onClick={()=>void remove(item)}>Eliminar mi confirmación</button>}</article>)}</div>{!sending&&results.length===0&&query&&<p className="empty-state">Realiza la búsqueda para consultar confirmaciones activas.</p>}</>}
+  </main>
 }
 
 function ReportForm({ close, onCreated, initialCoordinates }: { close: () => void; onCreated: (i: ApiIncident) => void; initialCoordinates?: Coordinates }) {
@@ -99,4 +108,5 @@ export default function App(){const[view,setView]=useState<View>('home'),[filter
   useEffect(()=>{void load()},[load]);const visible=useMemo(()=>incidents.filter(i=>filter==='all'||(filter==='urgent'?['help','damage','landslide'].includes(i.kind):['water','medical','shelter','aid'].includes(i.kind))),[filter,incidents])
   const locate=()=>navigator.geolocation?.getCurrentPosition(p=>{setCoordinates({latitude:p.coords.latitude,longitude:p.coords.longitude});setView('report')},()=>alert('No fue posible obtener tu ubicación.'))
   const created=(item:ApiIncident)=>{setIncidents(current=>[mapIncident(item),...current]);setOnline(true)}
+  if(view==='safety')return <div className="app"><Header onHome={()=>setView('home')} online={online}/><SafetyPage close={()=>setView('home')}/><footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p></footer></div>
   return <div className="app"><Header onHome={()=>setView('home')} online={online}/>{view==='report'?<ReportForm close={()=>setView('home')} onCreated={created} initialCoordinates={coordinates}/>:view==='people'?<PeoplePage close={()=>setView('home')}/>:<><Hero setView={setView}/><button className="location global-location" onClick={locate}><MapPin size={17}/> Usar mi ubicación para reportar <span>›</span></button><nav className="quick-actions"><button onClick={()=>setView('people')}><UserRoundSearch/><span><b>Buscar persona</b><small>Desaparecidos y localizados</small></span></button><button onClick={()=>setView('report')}><House/><span><b>Reportar daño</b><small>Viviendas, vías y servicios</small></span></button></nav><div className="filterbar"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>Todos</button><button className={filter==='urgent'?'active':''} onClick={()=>setFilter('urgent')}>Urgentes</button><button className={filter==='resources'?'active':''} onClick={()=>setFilter('resources')}>Ayuda disponible</button></div><MapPanel items={visible} onLocate={locate}/><Feed items={visible} loading={loading} onAll={()=>setFilter('all')}/><section className="public-note"><CircleHelp/><div><b>Plataforma ciudadana, no oficial</b><p>La información debe contrastarse con autoridades. En una emergencia inmediata, llama al <strong>123</strong>.</p></div></section></>}<footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p><span><Users size={15}/> Hecho en comunidad</span></footer></div>}

@@ -61,3 +61,16 @@ export interface MissingPerson {
   status: 'missing' | 'sighting' | 'located'
   initials: string
 }
+
+export interface ApiSafetyCheckIn {
+  id: string
+  fullName: string
+  location: ApiLocation
+  message?: string
+  publicCode: string
+  status: 'self_reported' | 'verified' | 'removed'
+  expiresAt: string
+  createdAt: string
+  updatedAt: string
+  deleteToken?: string
+}
