@@ -82,7 +82,8 @@ function Header({ onHome, onEmergency, online }: { onHome: () => void; onEmergen
   </header>
 }
 
-function InfoTicker(){return <aside className="info-ticker" role="status" aria-label="Información ciudadana"><p><b>Información ciudadana:</b> En Capri se reporta alta presencia de ayuda. Si quieres colaborar y es seguro desplazarte, consulta en el mapa los otros puntos de ayuda urgente y confirma sus necesidades antes de salir.</p></aside>}
+const tickerMessage=<><b>Información ciudadana:</b> En Capri se reporta alta presencia de ayuda. Si quieres colaborar y es seguro desplazarte, consulta en el mapa los otros puntos de ayuda urgente y confirma sus necesidades antes de salir.</>
+function InfoTicker(){return <aside className="info-ticker" role="status" aria-label="Información ciudadana"><div className="info-ticker-track"><span>{tickerMessage}</span><span aria-hidden="true">{tickerMessage}</span></div></aside>}
 
 function EmergencyLinesPage({ close, coordinates }: { close: () => void; coordinates?: Coordinates }) {
   const suggested=coordinates?directoryForCoordinates(coordinates.latitude,coordinates.longitude):'national'
