@@ -4,8 +4,9 @@ import { api } from './api/client'
 import { divIcon } from 'leaflet'
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import type { ApiIncident, ApiLocation, ApiMissingPerson, ApiSafetyCheckIn, Incident, MissingPerson, ReportKind } from './types'
+import { directoryForCoordinates, emergencyDirectories } from './data/emergencyLines'
 
-type View = 'home' | 'report' | 'people' | 'safety'
+type View = 'home' | 'report' | 'people' | 'safety' | 'emergency-lines'
 type Coordinates = { latitude: number; longitude: number }
 
 const isInAppBrowser = () => /Instagram|FBAN|FBAV|WhatsApp/i.test(navigator.userAgent)
@@ -45,13 +46,24 @@ const mapPerson = (item: ApiMissingPerson): MissingPerson => ({ id: item.id, nam
   place: `${item.location.municipalityName} · ${item.location.departmentName}`, lastSeen: new Date(item.lastSeenAt).toLocaleString('es-CO'),
   status: item.status, initials: item.fullName.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase() })
 
-function Header({ onHome, online }: { onHome: () => void; online: boolean }) {
+function Header({ onHome, onEmergency, online }: { onHome: () => void; onEmergency: () => void; online: boolean }) {
   const [open, setOpen] = useState(false)
   return <header className="topbar"><button className="brand" onClick={onHome}><span className="brand-mark">CR</span><span>Colombia<br/><b>Responde</b></span></button>
     <div className={`network ${online ? '' : 'offline'}`}>{online ? <Wifi size={15}/> : <WifiOff size={15}/>} {online ? 'API conectada' : 'Sin conexión'}</div>
     <button className="icon-button" onClick={() => setOpen(!open)} aria-label="Abrir menú"><Menu/></button>
-    {open && <div className="header-menu"><button onClick={() => { onHome(); setOpen(false) }}>Inicio</button><a href="tel:123">Llamar al 123</a><button onClick={() => setOpen(false)}>Cerrar</button></div>}
+    {open && <div className="header-menu"><button onClick={() => { onHome(); setOpen(false) }}>Inicio</button><button onClick={() => { onEmergency(); setOpen(false) }}>Líneas de emergencia</button><a href="tel:123">Llamar al 123</a><button onClick={() => setOpen(false)}>Cerrar</button></div>}
   </header>
+}
+
+function EmergencyLinesPage({ close, coordinates }: { close: () => void; coordinates?: Coordinates }) {
+  const suggested=coordinates?directoryForCoordinates(coordinates.latitude,coordinates.longitude):'national'
+  const [region,setRegion]=useState(suggested)
+  const directory=emergencyDirectories.find(item=>item.id===region)??emergencyDirectories[0]
+  return <main className="form-page emergency-page"><button className="back" onClick={close}><ArrowLeft/> Volver</button><span className="section-kicker">DIRECTORIO TERRITORIAL</span><h1>Líneas de emergencia</h1><p>Los números pueden cambiar según la ciudad. Selecciona tu territorio y llama solamente si necesitas atención real.</p>
+    <label>Territorio<select value={region} onChange={event=>setRegion(event.target.value)}>{emergencyDirectories.map(item=><option value={item.id} key={item.id}>{item.label} · {item.department}</option>)}</select></label>
+    <div className="emergency-list">{directory.lines.map(line=><a className={line.primary?'primary-line':''} href={`tel:${line.number}`} key={`${directory.id}-${line.number}`}><span><b>{line.name}</b><small>{line.purpose}</small></span><strong>{line.number}</strong></a>)}</div>
+    <div className="public-note emergency-source"><ShieldCheck/><div><b>Información territorial verificada</b><p>Revisada el {new Date(`${directory.verifiedAt}T12:00:00`).toLocaleDateString('es-CO')}. <a href={directory.sourceUrl} target="_blank" rel="noreferrer">Consultar fuente oficial</a>.</p></div></div>
+  </main>
 }
 
 function Hero({ setView }: { setView: (v: View) => void }) {
@@ -141,5 +153,7 @@ export default function App(){const[view,setView]=useState<View>('home'),[filter
   const locate=()=>{setLocationError('');requestCoordinates(value=>{setCoordinates(value);setView('report')},setLocationError)}
   const locateOnMap=()=>{setLocationError('');requestCoordinates(setCoordinates,setLocationError)}
   const created=(item:ApiIncident)=>{setIncidents(current=>[mapIncident(item),...current]);setOnline(true)}
-  if(view==='safety')return <div className="app"><Header onHome={()=>setView('home')} online={online}/><SafetyPage close={()=>setView('home')}/><footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p></footer></div>
-  return <div className="app"><Header onHome={()=>setView('home')} online={online}/>{view==='report'?<ReportForm close={()=>setView('home')} onCreated={created} initialCoordinates={coordinates}/>:view==='people'?<PeoplePage close={()=>setView('home')}/>:<><Hero setView={setView}/><button className="location global-location" onClick={locate}><MapPin size={17}/> Usar mi ubicación para reportar <span>›</span></button>{locationError&&<div className="location-error home-location-error" role="alert"><AlertTriangle/><span>{locationError}<button onClick={()=>setView('report')}>Seleccionar en el mapa</button></span></div>}<nav className="quick-actions"><button onClick={()=>setView('people')}><UserRoundSearch/><span><b>Buscar persona</b><small>Desaparecidos y localizados</small></span></button><button onClick={()=>setView('report')}><House/><span><b>Reportar daño</b><small>Viviendas, vías y servicios</small></span></button></nav><div className="filterbar"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>Todos</button><button className={filter==='urgent'?'active':''} onClick={()=>setFilter('urgent')}>Urgentes</button><button className={filter==='resources'?'active':''} onClick={()=>setFilter('resources')}>Ayuda disponible</button></div><MapPanel items={visible} onLocate={locateOnMap} userCoordinates={coordinates}/><Feed items={visible} loading={loading} onAll={()=>setFilter('all')}/><section className="public-note"><CircleHelp/><div><b>Plataforma ciudadana, no oficial</b><p>La información debe contrastarse con autoridades. En una emergencia inmediata, llama al <strong>123</strong>.</p></div></section></>}<footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p><span><Users size={15}/> Hecho en comunidad</span></footer></div>}
+  const header=<Header onHome={()=>setView('home')} onEmergency={()=>setView('emergency-lines')} online={online}/>
+  if(view==='safety')return <div className="app">{header}<SafetyPage close={()=>setView('home')}/><footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p></footer></div>
+  if(view==='emergency-lines')return <div className="app">{header}<EmergencyLinesPage close={()=>setView('home')} coordinates={coordinates}/><footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p></footer></div>
+  return <div className="app">{header}{view==='report'?<ReportForm close={()=>setView('home')} onCreated={created} initialCoordinates={coordinates}/>:view==='people'?<PeoplePage close={()=>setView('home')}/>:<><Hero setView={setView}/><button className="location global-location" onClick={locate}><MapPin size={17}/> Usar mi ubicación para reportar <span>›</span></button>{locationError&&<div className="location-error home-location-error" role="alert"><AlertTriangle/><span>{locationError}<button onClick={()=>setView('report')}>Seleccionar en el mapa</button></span></div>}<nav className="quick-actions"><button onClick={()=>setView('people')}><UserRoundSearch/><span><b>Buscar persona</b><small>Desaparecidos y localizados</small></span></button><button onClick={()=>setView('report')}><House/><span><b>Reportar daño</b><small>Viviendas, vías y servicios</small></span></button></nav><div className="filterbar"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>Todos</button><button className={filter==='urgent'?'active':''} onClick={()=>setFilter('urgent')}>Urgentes</button><button className={filter==='resources'?'active':''} onClick={()=>setFilter('resources')}>Ayuda disponible</button></div><MapPanel items={visible} onLocate={locateOnMap} userCoordinates={coordinates}/><Feed items={visible} loading={loading} onAll={()=>setFilter('all')}/><section className="public-note"><CircleHelp/><div><b>Plataforma ciudadana, no oficial</b><p>La información debe contrastarse con autoridades. <button className="text-link" onClick={()=>setView('emergency-lines')}>Consulta las líneas de tu región</button>.</p></div></section></>}<footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p><span><Users size={15}/> Hecho en comunidad</span></footer></div>}
