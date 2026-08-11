@@ -2,9 +2,9 @@ export type ReportKind = 'help' | 'damage' | 'landslide' | 'road' | 'water' | 'p
 export type Verification = 'unverified' | 'evidence' | 'community' | 'verified' | 'official'
 
 export interface ApiLocation {
-  departmentCode: string
+  departmentCode?: string
   departmentName: string
-  municipalityCode: string
+  municipalityCode?: string
   municipalityName: string
   locality?: string
 }

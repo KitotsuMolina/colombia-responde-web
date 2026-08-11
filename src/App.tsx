@@ -32,8 +32,9 @@ const kindMeta: Record<ReportKind, { label: string; icon: typeof Siren; tone: st
   medical: { label: 'Punto médico', icon: HeartHandshake, tone: 'green' }, shelter: { label: 'Albergue', icon: House, tone: 'green' },
   aid: { label: 'Punto de ayuda', icon: PackageOpen, tone: 'green' },
 }
+const markerGlyph:Record<ReportKind,string>={help:'!',damage:'⌂',landslide:'▲',road:'━',water:'●',power:'⚡',medical:'✚',shelter:'⌂',aid:'◆'}
 
-const blankLocation: ApiLocation = { departmentCode: '', departmentName: '', municipalityCode: '', municipalityName: '', locality: '' }
+const blankLocation: ApiLocation = { departmentName: '', municipalityName: '', locality: '' }
 const timeAgo = (date: string) => new Intl.RelativeTimeFormat('es', { numeric: 'auto' }).format(-Math.max(1, Math.round((Date.now() - new Date(date).getTime()) / 60000)), 'minute')
 const mapIncident = (item: ApiIncident): Incident => {
   const [longitude, latitude] = item.coordinates.coordinates
@@ -85,7 +86,7 @@ function MapPanel({ items, onLocate, userCoordinates }: { items: Incident[]; onL
     <div className="map-canvas leaflet-map"><MapContainer center={[4.5709,-74.2973]} zoom={5} minZoom={4} scrollWheelZoom={false}>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
       <MapRecenter coordinates={userCoordinates}/>{userCoordinates&&<Marker position={[userCoordinates.latitude,userCoordinates.longitude]}><Popup><b>Tu ubicación aproximada</b></Popup></Marker>}
-      {items.map(item => { const meta=kindMeta[item.kind]; return <Marker key={item.id} position={[item.latitude,item.longitude]} icon={divIcon({className:'leaflet-report-icon',html:`<span class="leaflet-marker ${meta.tone}"></span>`,iconSize:[30,30],iconAnchor:[15,15]})}><Popup><b>{item.title}</b><br/>{item.place}<br/><small>{item.time} · {item.verification==='official'?'Fuente oficial':'Reporte ciudadano'}</small></Popup></Marker> })}
+      {items.map(item => { const meta=kindMeta[item.kind]; return <Marker key={item.id} position={[item.latitude,item.longitude]} icon={divIcon({className:'leaflet-report-icon',html:`<span class="leaflet-marker ${meta.tone}"><i>${markerGlyph[item.kind]}</i></span>`,iconSize:[38,46],iconAnchor:[19,44],popupAnchor:[0,-42]})}><Popup><b>{meta.label}</b><br/>{item.title}<br/>{item.place}<br/><small>{item.time} · {item.verification==='official'?'Fuente oficial':'Reporte ciudadano'}</small></Popup></Marker> })}
     </MapContainer>{!items.length&&<div className="empty-map">No hay reportes para este filtro</div>}<button className="locate" onClick={onLocate} aria-label="Obtener ubicación"><Navigation size={18}/></button></div>
     <div className="legend"><span><i className="dot red"/> Urgente</span><span><i className="dot orange"/> Daño</span><span><i className="dot green"/> Recurso</span></div></section>
 }
@@ -107,8 +108,8 @@ function LocationPicker({ coordinates, onChange }: { coordinates?: Coordinates; 
 function LocationFields({ value, onChange, coordinates, setCoordinates }: { value: ApiLocation; onChange: (v: ApiLocation) => void; coordinates?: Coordinates; setCoordinates?: (v: Coordinates) => void }) {
   const [locationError,setLocationError]=useState('')
   const locate = () => { setLocationError(''); requestCoordinates(value => setCoordinates?.(value), setLocationError) }
-  const field = (key: keyof ApiLocation, placeholder: string, maxLength?: number) => <input required value={value[key] || ''} maxLength={maxLength} placeholder={placeholder} onChange={e => onChange({ ...value, [key]:e.target.value })}/>
-  return <div className="location-fields"><div>{field('departmentName','Departamento')}{field('departmentCode','Código DANE (2 dígitos)',2)}</div><div>{field('municipalityName','Municipio o distrito')}{field('municipalityCode','Código DANE (5 dígitos)',5)}</div>{field('locality','Barrio, vereda o localidad')}{setCoordinates&&<><button type="button" className="outline full" onClick={locate}><Navigation/> {coordinates ? `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}` : 'Usar ubicación GPS'}</button>{locationError&&<div className="location-error" role="alert"><AlertTriangle/>{locationError}</div>}<LocationPicker coordinates={coordinates} onChange={value=>{setLocationError('');setCoordinates(value)}}/></>}</div>
+  const field = (key: keyof ApiLocation, placeholder: string, required=true) => <input required={required} value={value[key] || ''} placeholder={placeholder} onChange={e => onChange({ ...value, [key]:e.target.value })}/>
+  return <div className="location-fields">{field('departmentName','Departamento')}{field('municipalityName','Municipio o distrito')}{field('locality','Barrio, vereda o localidad',false)}{setCoordinates&&<><button type="button" className="outline full" onClick={locate}><Navigation/> {coordinates ? `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}` : 'Usar ubicación GPS'}</button>{locationError&&<div className="location-error" role="alert"><AlertTriangle/>{locationError}</div>}<LocationPicker coordinates={coordinates} onChange={value=>{setLocationError('');setCoordinates(value)}}/></>}</div>
 }
 
 function SafetyPage({ close }: { close: () => void }) {
