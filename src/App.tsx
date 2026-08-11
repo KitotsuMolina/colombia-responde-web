@@ -1,93 +1,102 @@
-import { useMemo, useState } from 'react'
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, CircleHelp, Clock3, HeartHandshake, House, MapPin, Menu, Navigation, PackageOpen, Search, ShieldCheck, Siren, UserRoundSearch, Users, Wifi, X } from 'lucide-react'
-import { incidents, people } from './data'
-import type { Incident, ReportKind } from './types'
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, CircleHelp, Clock3, HeartHandshake, House, LoaderCircle, MapPin, Menu, Navigation, PackageOpen, Search, ShieldCheck, Siren, UserRoundSearch, Users, Wifi, WifiOff, X } from 'lucide-react'
+import { api } from './api/client'
+import { divIcon } from 'leaflet'
+import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+import type { ApiIncident, ApiLocation, ApiMissingPerson, Incident, MissingPerson, ReportKind } from './types'
 
 type View = 'home' | 'report' | 'people'
+type Coordinates = { latitude: number; longitude: number }
 
 const kindMeta: Record<ReportKind, { label: string; icon: typeof Siren; tone: string }> = {
-  help: { label: 'Ayuda urgente', icon: Siren, tone: 'red' },
-  damage: { label: 'Daño estructural', icon: House, tone: 'orange' },
-  landslide: { label: 'Deslizamiento', icon: AlertTriangle, tone: 'orange' },
-  road: { label: 'Vía bloqueada', icon: Navigation, tone: 'yellow' },
-  water: { label: 'Agua disponible', icon: PackageOpen, tone: 'green' },
-  medical: { label: 'Punto médico', icon: HeartHandshake, tone: 'green' },
-  shelter: { label: 'Albergue', icon: House, tone: 'green' },
+  help: { label: 'Ayuda urgente', icon: Siren, tone: 'red' }, damage: { label: 'Daño estructural', icon: House, tone: 'orange' },
+  landslide: { label: 'Deslizamiento', icon: AlertTriangle, tone: 'orange' }, road: { label: 'Vía bloqueada', icon: Navigation, tone: 'yellow' },
+  water: { label: 'Agua disponible', icon: PackageOpen, tone: 'green' }, power: { label: 'Sin electricidad', icon: AlertTriangle, tone: 'yellow' },
+  medical: { label: 'Punto médico', icon: HeartHandshake, tone: 'green' }, shelter: { label: 'Albergue', icon: House, tone: 'green' },
+  aid: { label: 'Punto de ayuda', icon: PackageOpen, tone: 'green' },
 }
 
-function Header({ onHome }: { onHome: () => void }) {
-  return <header className="topbar">
-    <button className="brand" onClick={onHome} aria-label="Ir al inicio">
-      <span className="brand-mark">CR</span><span>Colombia<br/><b>Responde</b></span>
-    </button>
-    <div className="network"><Wifi size={15}/> Con conexión</div>
-    <button className="icon-button" aria-label="Abrir menú"><Menu/></button>
+const blankLocation: ApiLocation = { departmentCode: '', departmentName: '', municipalityCode: '', municipalityName: '', locality: '' }
+const timeAgo = (date: string) => new Intl.RelativeTimeFormat('es', { numeric: 'auto' }).format(-Math.max(1, Math.round((Date.now() - new Date(date).getTime()) / 60000)), 'minute')
+const mapIncident = (item: ApiIncident): Incident => {
+  const [longitude, latitude] = item.coordinates.coordinates
+  return { id: item.id.slice(0, 8).toUpperCase(), kind: item.kind, title: item.title, description: item.description,
+    place: `${item.location.municipalityName} · ${item.location.departmentName}`, time: timeAgo(item.createdAt),
+    verification: item.verificationStatus, people: item.peopleAtRisk,
+    x: Math.min(90, Math.max(10, ((longitude + 79) / 13) * 80 + 10)), y: Math.min(90, Math.max(10, ((13 - latitude) / 17) * 80 + 10)), latitude, longitude }
+}
+const mapPerson = (item: ApiMissingPerson): MissingPerson => ({ id: item.id, name: item.fullName, age: item.age,
+  place: `${item.location.municipalityName} · ${item.location.departmentName}`, lastSeen: new Date(item.lastSeenAt).toLocaleString('es-CO'),
+  status: item.status, initials: item.fullName.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase() })
+
+function Header({ onHome, online }: { onHome: () => void; online: boolean }) {
+  const [open, setOpen] = useState(false)
+  return <header className="topbar"><button className="brand" onClick={onHome}><span className="brand-mark">CR</span><span>Colombia<br/><b>Responde</b></span></button>
+    <div className={`network ${online ? '' : 'offline'}`}>{online ? <Wifi size={15}/> : <WifiOff size={15}/>} {online ? 'API conectada' : 'Sin conexión'}</div>
+    <button className="icon-button" onClick={() => setOpen(!open)} aria-label="Abrir menú"><Menu/></button>
+    {open && <div className="header-menu"><button onClick={() => { onHome(); setOpen(false) }}>Inicio</button><a href="tel:123">Llamar al 123</a><button onClick={() => setOpen(false)}>Cerrar</button></div>}
   </header>
 }
 
 function Hero({ setView }: { setView: (v: View) => void }) {
-  return <section className="hero">
-    <div className="eyebrow"><span className="pulse"/> RED CIUDADANA DE EMERGENCIA</div>
-    <h1>Ayuda que encuentra<br/><em>a quien la necesita.</em></h1>
-    <p>Reporta emergencias, encuentra personas y consulta recursos disponibles en todo Colombia.</p>
-    <div className="hero-actions">
+  const [safe, setSafe] = useState(() => localStorage.getItem('colombia-responde-safe') === 'true')
+  const markSafe = () => { localStorage.setItem('colombia-responde-safe', 'true'); setSafe(true) }
+  return <section className="hero"><div className="eyebrow"><span className="pulse"/> RED CIUDADANA DE EMERGENCIA</div><h1>Ayuda que encuentra<br/><em>a quien la necesita.</em></h1>
+    <p>Reporta emergencias, encuentra personas y consulta recursos disponibles en todo Colombia.</p><div className="hero-actions">
       <button className="primary danger" onClick={() => setView('report')}><Siren/> Necesito ayuda</button>
-      <button className="primary safe"><CheckCircle2/> Estoy bien</button>
-    </div>
-    <button className="location"><MapPin size={17}/> Usar mi ubicación <span>›</span></button>
+      <button className="primary safe" onClick={markSafe}><CheckCircle2/> {safe ? 'Estado guardado' : 'Estoy bien'}</button></div>
+    {safe && <p className="inline-success">Tu estado quedó guardado en este dispositivo.</p>}
   </section>
 }
 
-function MapPanel({ items }: { items: Incident[] }) {
-  return <section className="map-card">
-    <div className="map-head">
-      <div><span className="section-kicker">SITUACIÓN ACTUAL</span><h2>Mapa ciudadano</h2></div>
-      <button className="region"><MapPin size={15}/> Colombia <ChevronDown size={14}/></button>
-    </div>
-    <div className="map-canvas" aria-label="Mapa esquemático de reportes en Colombia">
-      <svg className="colombia-shape" viewBox="0 0 300 390" aria-hidden="true"><path d="M105 15l37 17 31-10 23 35 34 13-9 43 28 26-15 35 15 32-29 23-11 45-30 18-14 68-28 18-17-47-30-31-2-46-33-14 18-42-21-37 23-30-14-32 35-24 13-40z"/></svg>
-      <div className="map-grid"/>
-      {items.map(item => { const meta = kindMeta[item.kind]; const Icon = meta.icon; return <button key={item.id} className={`marker ${meta.tone}`} style={{left:`${item.x}%`, top:`${item.y}%`}} title={`${item.title}, ${item.place}`}><Icon size={17}/><span className="marker-pop">{item.title}<small>{item.place}</small></span></button> })}
-      <div className="map-note">Datos de demostración</div>
-      <button className="locate"><Navigation size={18}/></button>
-    </div>
-    <div className="legend"><span><i className="dot red"/> Urgente</span><span><i className="dot orange"/> Daño</span><span><i className="dot green"/> Recurso</span></div>
+function MapPanel({ items, onLocate }: { items: Incident[]; onLocate: () => void }) {
+  return <section className="map-card"><div className="map-head"><div><span className="section-kicker">SITUACIÓN ACTUAL</span><h2>Mapa ciudadano</h2></div><span className="region"><MapPin size={15}/> Colombia <ChevronDown size={14}/></span></div>
+    <div className="map-canvas leaflet-map"><MapContainer center={[4.5709,-74.2973]} zoom={5} minZoom={4} scrollWheelZoom={false}>
+      <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
+      {items.map(item => { const meta=kindMeta[item.kind]; return <Marker key={item.id} position={[item.latitude,item.longitude]} icon={divIcon({className:'leaflet-report-icon',html:`<span class="leaflet-marker ${meta.tone}"></span>`,iconSize:[30,30],iconAnchor:[15,15]})}><Popup><b>{item.title}</b><br/>{item.place}<br/><small>{item.time} · {item.verification==='official'?'Fuente oficial':'Reporte ciudadano'}</small></Popup></Marker> })}
+    </MapContainer>{!items.length&&<div className="empty-map">No hay reportes para este filtro</div>}<button className="locate" onClick={onLocate} aria-label="Obtener ubicación"><Navigation size={18}/></button></div>
+    <div className="legend"><span><i className="dot red"/> Urgente</span><span><i className="dot orange"/> Daño</span><span><i className="dot green"/> Recurso</span></div></section>
+}
+
+function Feed({ items, loading, onAll }: { items: Incident[]; loading: boolean; onAll: () => void }) {
+  return <section className="feed"><div className="section-row"><div><span className="section-kicker">EN LA COMUNIDAD</span><h2>Reportes recientes</h2></div><button onClick={onAll}>Ver todos</button></div>
+    {loading && <div className="loading"><LoaderCircle/> Cargando reportes…</div>}<div className="report-list">{items.map(item => { const meta=kindMeta[item.kind]; const Icon=meta.icon; return <article className="report" key={item.id}><div className={`report-icon ${meta.tone}`}><Icon/></div><div className="report-body"><div className="report-title"><h3>{item.title}</h3><span>{item.id}</span></div><p><MapPin size={14}/>{item.place}</p><div className="report-meta"><span><Clock3 size={13}/>{item.time}</span><span className={`verification ${item.verification}`}><ShieldCheck size={13}/>{item.verification==='verified'?'Verificado':item.verification==='official'?'Fuente oficial':item.verification==='community'?'Confirmación comunitaria':'Sin verificar'}</span></div></div></article>})}</div>
   </section>
 }
 
-function Feed({ items }: { items: Incident[] }) {
-  return <section className="feed">
-    <div className="section-row"><div><span className="section-kicker">EN LA COMUNIDAD</span><h2>Reportes recientes</h2></div><button>Ver todos</button></div>
-    <div className="report-list">{items.map(item => { const meta = kindMeta[item.kind]; const Icon = meta.icon; return <article className="report" key={item.id}>
-      <div className={`report-icon ${meta.tone}`}><Icon/></div>
-      <div className="report-body"><div className="report-title"><h3>{item.title}</h3><span>{item.id}</span></div><p><MapPin size={14}/>{item.place}</p><div className="report-meta"><span><Clock3 size={13}/>{item.time}</span><span className={`verification ${item.verification}`}><ShieldCheck size={13}/>{item.verification === 'verified' ? 'Verificado' : item.verification === 'community' ? 'Confirmación comunitaria' : 'Evidencia adjunta'}</span></div></div>
-    </article>})}</div>
-  </section>
+function LocationFields({ value, onChange, coordinates, setCoordinates }: { value: ApiLocation; onChange: (v: ApiLocation) => void; coordinates?: Coordinates; setCoordinates?: (v: Coordinates) => void }) {
+  const locate = () => navigator.geolocation?.getCurrentPosition(p => setCoordinates?.({ latitude:p.coords.latitude, longitude:p.coords.longitude }), () => alert('No fue posible obtener la ubicación. Revisa los permisos del navegador.'))
+  const field = (key: keyof ApiLocation, placeholder: string, maxLength?: number) => <input required value={value[key] || ''} maxLength={maxLength} placeholder={placeholder} onChange={e => onChange({ ...value, [key]:e.target.value })}/>
+  return <div className="location-fields"><div>{field('departmentName','Departamento')}{field('departmentCode','Código DANE (2 dígitos)',2)}</div><div>{field('municipalityName','Municipio o distrito')}{field('municipalityCode','Código DANE (5 dígitos)',5)}</div>{field('locality','Barrio, vereda o localidad')}{setCoordinates&&<button type="button" className="outline full" onClick={locate}><Navigation/> {coordinates ? `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}` : 'Capturar ubicación GPS'}</button>}</div>
 }
 
-function ReportForm({ close }: { close: () => void }) {
-  const [kind, setKind] = useState<ReportKind>('help'); const [sent, setSent] = useState(false)
-  if (sent) return <main className="form-page success-page"><CheckCircle2/><h1>Reporte guardado</h1><p>Quedó almacenado en este dispositivo y se enviará cuando haya conexión.</p><b>#COL-{Math.floor(Math.random()*90000+10000)}</b><button className="primary safe" onClick={close}>Volver al mapa</button></main>
-  return <main className="form-page"><button className="back" onClick={close}><ArrowLeft/> Volver</button><span className="section-kicker">NUEVO REPORTE</span><h1>¿Qué está ocurriendo?</h1><p>Si existe peligro inmediato, aléjate de la zona y contacta al 123.</p>
-    <div className="kind-grid">{(Object.entries(kindMeta) as [ReportKind, typeof kindMeta[ReportKind]][]).map(([key, meta]) => { const Icon=meta.icon; return <button className={kind===key?'selected':''} onClick={()=>setKind(key)} key={key}><Icon/><span>{meta.label}</span></button>})}</div>
-    <label>Ubicación del reporte<div className="input"><MapPin/><input placeholder="Departamento, municipio o dirección"/><button><Navigation/></button></div></label>
-    <label>Cuéntanos lo esencial<textarea placeholder="¿Qué pasó? ¿Hay personas en riesgo? ¿Cómo se puede acceder?" rows={4}/></label>
-    <div className="privacy"><ShieldCheck/><p><b>Publica con cuidado</b><br/>No incluyas teléfonos, documentos ni información médica en la descripción pública.</p></div>
-    <button className="primary danger full" onClick={()=>setSent(true)}>Guardar reporte</button>
-  </main>
+function ReportForm({ close, onCreated, initialCoordinates }: { close: () => void; onCreated: (i: ApiIncident) => void; initialCoordinates?: Coordinates }) {
+  const [kind,setKind]=useState<ReportKind>('help'), [location,setLocation]=useState<ApiLocation>(blankLocation), [coordinates,setCoordinates]=useState<Coordinates|undefined>(initialCoordinates)
+  const [title,setTitle]=useState(''), [description,setDescription]=useState(''), [peopleAtRisk,setPeopleAtRisk]=useState(''), [sending,setSending]=useState(false), [error,setError]=useState(''), [sent,setSent]=useState<ApiIncident>()
+  const submit=async(e:FormEvent)=>{e.preventDefault();if(!coordinates){setError('Captura la ubicación GPS antes de enviar.');return}setSending(true);setError('');try{const created=await api.createIncident({kind,title,description,location,latitude:coordinates.latitude,longitude:coordinates.longitude,peopleAtRisk:peopleAtRisk?Number(peopleAtRisk):undefined});setSent(created);onCreated(created)}catch(err){setError(err instanceof Error?err.message:'No fue posible enviar el reporte')}finally{setSending(false)}}
+  if(sent)return <main className="form-page success-page"><CheckCircle2/><h1>Reporte registrado</h1><p>La API confirmó el reporte. Su estado inicial es “sin verificar”.</p><b>#{sent.id.slice(0,8).toUpperCase()}</b><button className="primary safe" onClick={close}>Volver al mapa</button></main>
+  return <main className="form-page"><button className="back" onClick={close}><ArrowLeft/> Volver</button><span className="section-kicker">NUEVO REPORTE</span><h1>¿Qué está ocurriendo?</h1><p>Si existe peligro inmediato, aléjate de la zona y contacta al 123.</p><form onSubmit={submit}>
+    <div className="kind-grid">{(Object.entries(kindMeta) as [ReportKind,typeof kindMeta[ReportKind]][]).map(([key,meta])=>{const Icon=meta.icon;return <button type="button" className={kind===key?'selected':''} onClick={()=>setKind(key)} key={key}><Icon/><span>{meta.label}</span></button>})}</div>
+    <label>Título<input required minLength={3} maxLength={160} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ej. Vivienda afectada"/></label><label>Ubicación territorial<LocationFields value={location} onChange={setLocation} coordinates={coordinates} setCoordinates={setCoordinates}/></label>
+    <label>Personas en riesgo<input min={0} max={10000} type="number" value={peopleAtRisk} onChange={e=>setPeopleAtRisk(e.target.value)} placeholder="Opcional"/></label><label>Cuéntanos lo esencial<textarea required minLength={5} maxLength={2000} value={description} onChange={e=>setDescription(e.target.value)} rows={4}/></label>
+    <div className="privacy"><ShieldCheck/><p><b>Publica con cuidado</b><br/>No incluyas teléfonos, documentos ni información médica.</p></div>{error&&<p className="form-error">{error}</p>}<button disabled={sending} className="primary danger full">{sending?<><LoaderCircle/> Enviando…</>:'Enviar reporte'}</button></form></main>
 }
 
 function PeoplePage({ close }: { close: () => void }) {
-  const [query,setQuery]=useState(''); const filtered=people.filter(p=>p.name.toLowerCase().includes(query.toLowerCase())||p.place.toLowerCase().includes(query.toLowerCase()))
-  return <main className="form-page people-page"><button className="back" onClick={close}><ArrowLeft/> Volver</button><span className="section-kicker">REUNIFICACIÓN FAMILIAR</span><h1>Buscar una persona</h1><p>Consulta por nombre o lugar. Los resultados son ciudadanos y requieren verificación.</p>
-    <div className="searchbox"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Nombre, municipio o departamento"/>{query&&<button onClick={()=>setQuery('')}><X/></button>}</div>
-    <button className="outline full"><UserRoundSearch/> Reportar persona desaparecida</button>
-    <div className="people-list">{filtered.map(person=><article className="person" key={person.id}><div className="avatar">{person.initials}</div><div><h3>{person.name}, {person.age}</h3><p><MapPin size={13}/>{person.place}</p><small>{person.lastSeen}</small></div><span className={`person-status ${person.status}`}>{person.status==='missing'?'Desaparecida':person.status==='sighting'?'Avistamiento':'Localizada'}</span></article>)}</div>
+  const [query,setQuery]=useState(''), [people,setPeople]=useState<MissingPerson[]>([]), [loading,setLoading]=useState(true), [creating,setCreating]=useState(false), [error,setError]=useState('')
+  const [fullName,setFullName]=useState(''), [age,setAge]=useState(''), [lastSeenAt,setLastSeenAt]=useState(''), [details,setDetails]=useState(''), [location,setLocation]=useState<ApiLocation>(blankLocation)
+  const load=useCallback(async()=>{setLoading(true);try{setPeople((await api.people(query)).map(mapPerson));setError('')}catch(err){setError(err instanceof Error?err.message:'Error de conexión')}finally{setLoading(false)}},[query])
+  useEffect(()=>{const timer=setTimeout(()=>void load(),300);return()=>clearTimeout(timer)},[load])
+  const submit=async(e:FormEvent)=>{e.preventDefault();setLoading(true);try{await api.createPerson({fullName,age:age?Number(age):undefined,location,lastSeenAt:new Date(lastSeenAt).toISOString(),lastSeenDetails:details,contactToken:crypto.randomUUID()});setCreating(false);setFullName('');setAge('');setDetails('');await load()}catch(err){setError(err instanceof Error?err.message:'No fue posible registrar a la persona');setLoading(false)}}
+  return <main className="form-page people-page"><button className="back" onClick={close}><ArrowLeft/> Volver</button><span className="section-kicker">REUNIFICACIÓN FAMILIAR</span><h1>{creating?'Reportar una persona':'Buscar una persona'}</h1>
+    {!creating?<><p>Consulta la base ciudadana por nombre.</p><div className="searchbox"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Nombre de la persona"/>{query&&<button onClick={()=>setQuery('')}><X/></button>}</div><button className="outline full" onClick={()=>setCreating(true)}><UserRoundSearch/> Reportar persona desaparecida</button>{loading&&<div className="loading"><LoaderCircle/> Buscando…</div>}{error&&<p className="form-error">{error}</p>}<div className="people-list">{people.map(person=><article className="person" key={person.id}><div className="avatar">{person.initials}</div><div><h3>{person.name}{person.age!==undefined?`, ${person.age}`:''}</h3><p><MapPin size={13}/>{person.place}</p><small>{person.lastSeen}</small></div><span className={`person-status ${person.status}`}>{person.status==='missing'?'Desaparecida':person.status==='sighting'?'Avistamiento':'Localizada'}</span></article>)}</div>{!loading&&!people.length&&<p className="empty-state">No se encontraron personas con ese nombre.</p>}</>
+    :<form onSubmit={submit}><label>Nombre completo<input required minLength={3} value={fullName} onChange={e=>setFullName(e.target.value)}/></label><label>Edad aproximada<input type="number" min={0} max={125} value={age} onChange={e=>setAge(e.target.value)}/></label><label>Último contacto<input required type="datetime-local" value={lastSeenAt} onChange={e=>setLastSeenAt(e.target.value)}/></label><label>Ubicación territorial<LocationFields value={location} onChange={setLocation}/></label><label>Detalles<textarea required minLength={5} maxLength={2000} value={details} onChange={e=>setDetails(e.target.value)} rows={4}/></label>{error&&<p className="form-error">{error}</p>}<div className="form-actions"><button type="button" className="outline" onClick={()=>setCreating(false)}>Cancelar</button><button disabled={loading} className="primary danger">Registrar</button></div></form>}
   </main>
 }
 
-export default function App() {
-  const [view,setView]=useState<View>('home'); const [filter,setFilter]=useState<'all'|'urgent'|'resources'>('all')
-  const visible=useMemo(()=>incidents.filter(i=>filter==='all'||(filter==='urgent'?['help','damage','landslide'].includes(i.kind):['water','medical','shelter'].includes(i.kind))),[filter])
-  return <div className="app"><Header onHome={()=>setView('home')}/>{view==='report'?<ReportForm close={()=>setView('home')}/>:view==='people'?<PeoplePage close={()=>setView('home')}/>:<><Hero setView={setView}/><nav className="quick-actions"><button onClick={()=>setView('people')}><UserRoundSearch/><span><b>Buscar persona</b><small>Desaparecidos y localizados</small></span></button><button onClick={()=>setView('report')}><House/><span><b>Reportar daño</b><small>Viviendas, vías y servicios</small></span></button></nav><div className="filterbar"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>Todos</button><button className={filter==='urgent'?'active':''} onClick={()=>setFilter('urgent')}>Urgentes</button><button className={filter==='resources'?'active':''} onClick={()=>setFilter('resources')}>Ayuda disponible</button></div><MapPanel items={visible}/><Feed items={visible}/><section className="public-note"><CircleHelp/><div><b>Plataforma ciudadana, no oficial</b><p>La información debe contrastarse con autoridades. En una emergencia inmediata, llama al <strong>123</strong>.</p></div></section></>}<footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p><span><Users size={15}/> Hecho en comunidad</span></footer></div>
-}
+export default function App(){const[view,setView]=useState<View>('home'),[filter,setFilter]=useState<'all'|'urgent'|'resources'>('all'),[incidents,setIncidents]=useState<Incident[]>([]),[loading,setLoading]=useState(true),[online,setOnline]=useState(false),[coordinates,setCoordinates]=useState<Coordinates>()
+  const load=useCallback(async()=>{setLoading(true);try{const[data]=await Promise.all([api.incidents(),api.health()]);setIncidents(data.map(mapIncident));setOnline(true)}catch{setOnline(false)}finally{setLoading(false)}},[])
+  useEffect(()=>{void load()},[load]);const visible=useMemo(()=>incidents.filter(i=>filter==='all'||(filter==='urgent'?['help','damage','landslide'].includes(i.kind):['water','medical','shelter','aid'].includes(i.kind))),[filter,incidents])
+  const locate=()=>navigator.geolocation?.getCurrentPosition(p=>{setCoordinates({latitude:p.coords.latitude,longitude:p.coords.longitude});setView('report')},()=>alert('No fue posible obtener tu ubicación.'))
+  const created=(item:ApiIncident)=>{setIncidents(current=>[mapIncident(item),...current]);setOnline(true)}
+  return <div className="app"><Header onHome={()=>setView('home')} online={online}/>{view==='report'?<ReportForm close={()=>setView('home')} onCreated={created} initialCoordinates={coordinates}/>:view==='people'?<PeoplePage close={()=>setView('home')}/>:<><Hero setView={setView}/><button className="location global-location" onClick={locate}><MapPin size={17}/> Usar mi ubicación para reportar <span>›</span></button><nav className="quick-actions"><button onClick={()=>setView('people')}><UserRoundSearch/><span><b>Buscar persona</b><small>Desaparecidos y localizados</small></span></button><button onClick={()=>setView('report')}><House/><span><b>Reportar daño</b><small>Viviendas, vías y servicios</small></span></button></nav><div className="filterbar"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>Todos</button><button className={filter==='urgent'?'active':''} onClick={()=>setFilter('urgent')}>Urgentes</button><button className={filter==='resources'?'active':''} onClick={()=>setFilter('resources')}>Ayuda disponible</button></div><MapPanel items={visible} onLocate={locate}/><Feed items={visible} loading={loading} onAll={()=>setFilter('all')}/><section className="public-note"><CircleHelp/><div><b>Plataforma ciudadana, no oficial</b><p>La información debe contrastarse con autoridades. En una emergencia inmediata, llama al <strong>123</strong>.</p></div></section></>}<footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p><span><Users size={15}/> Hecho en comunidad</span></footer></div>}
