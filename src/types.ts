@@ -25,6 +25,7 @@ export interface ApiIncident {
 }
 
 export interface Incident {
+  sourceId: string
   id: string
   kind: ReportKind
   title: string
@@ -38,6 +39,8 @@ export interface Incident {
   latitude: number
   longitude: number
 }
+export interface IncidentEvidence { id:string;url:string;mimeType:string;sizeBytes:number;createdAt:string }
+export interface ApiIncidentDetail extends ApiIncident { evidence:IncidentEvidence[] }
 
 export interface ApiMissingPerson {
   id: string
