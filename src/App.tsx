@@ -82,6 +82,8 @@ function Header({ onHome, onEmergency, online }: { onHome: () => void; onEmergen
   </header>
 }
 
+function InfoTicker(){return <aside className="info-ticker" role="status" aria-label="Información operativa"><span>INFORMACIÓN CIUDADANA</span><div><p>En Capri se reporta alta presencia de ayuda. Si quieres colaborar y es seguro desplazarte, consulta en el mapa los otros puntos de ayuda urgente y confirma sus necesidades antes de salir.</p></div></aside>}
+
 function EmergencyLinesPage({ close, coordinates }: { close: () => void; coordinates?: Coordinates }) {
   const suggested=coordinates?directoryForCoordinates(coordinates.latitude,coordinates.longitude):'national'
   const [region,setRegion]=useState(suggested)
@@ -200,7 +202,7 @@ function PublicApp(){const[view,setView]=useState<View>('home'),[filter,setFilte
   const locate=()=>{setLocationError('');requestCoordinates(value=>{setCoordinates(value);setView('report')},setLocationError)}
   const locateOnMap=()=>{setLocationError('');requestCoordinates(setCoordinates,setLocationError)}
   const created=(item:ApiIncident)=>{setIncidents(current=>[mapIncident(item),...current]);setOnline(true)}
-  const header=<Header onHome={()=>setView('home')} onEmergency={()=>setView('emergency-lines')} online={online}/>
+  const header=<><Header onHome={()=>setView('home')} onEmergency={()=>setView('emergency-lines')} online={online}/><InfoTicker/></>
   if(selectedIncident)return <div className="app">{header}<IncidentDetailPage id={selectedIncident} close={()=>setSelectedIncident(undefined)}/></div>
   if(view==='safety')return <div className="app">{header}<SafetyPage close={()=>setView('home')}/><footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p></footer></div>
   if(view==='emergency-lines')return <div className="app">{header}<EmergencyLinesPage close={()=>setView('home')} coordinates={coordinates}/><footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p></footer></div>
