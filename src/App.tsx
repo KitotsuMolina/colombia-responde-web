@@ -2,11 +2,27 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, CircleHelp, Clock3, HeartHandshake, House, LoaderCircle, MapPin, Menu, Navigation, PackageOpen, Search, ShieldCheck, Siren, UserRoundSearch, Users, Wifi, WifiOff, X } from 'lucide-react'
 import { api } from './api/client'
 import { divIcon } from 'leaflet'
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+import { MapContainer, Marker, Popup, TileLayer, useMapEvents } from 'react-leaflet'
 import type { ApiIncident, ApiLocation, ApiMissingPerson, ApiSafetyCheckIn, Incident, MissingPerson, ReportKind } from './types'
 
 type View = 'home' | 'report' | 'people' | 'safety'
 type Coordinates = { latitude: number; longitude: number }
+
+const isInAppBrowser = () => /Instagram|FBAN|FBAV|WhatsApp/i.test(navigator.userAgent)
+const geolocationMessage = (error?: GeolocationPositionError) => {
+  if (isInAppBrowser()) return 'El navegador interno de WhatsApp puede bloquear el GPS. Abre esta página en Safari o selecciona el punto manualmente en el mapa.'
+  if (error?.code === 1) return 'El permiso de ubicación está bloqueado. Actívalo en los ajustes del navegador o selecciona el punto manualmente en el mapa.'
+  if (error?.code === 3) return 'La ubicación tardó demasiado. Inténtalo otra vez o selecciona el punto manualmente en el mapa.'
+  return 'No pudimos obtener tu ubicación. Puedes seleccionar el punto manualmente en el mapa.'
+}
+const requestCoordinates = (success: (coordinates: Coordinates) => void, failure: (message: string) => void) => {
+  if (!navigator.geolocation) return failure('Este navegador no permite usar el GPS. Selecciona el punto manualmente en el mapa.')
+  navigator.geolocation.getCurrentPosition(
+    position => success({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+    error => failure(geolocationMessage(error)),
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+  )
+}
 
 const kindMeta: Record<ReportKind, { label: string; icon: typeof Siren; tone: string }> = {
   help: { label: 'Ayuda urgente', icon: Siren, tone: 'red' }, damage: { label: 'Daño estructural', icon: House, tone: 'orange' },
@@ -61,10 +77,19 @@ function Feed({ items, loading, onAll }: { items: Incident[]; loading: boolean; 
   </section>
 }
 
+function LocationPicker({ coordinates, onChange }: { coordinates?: Coordinates; onChange: (value: Coordinates) => void }) {
+  function ClickHandler() { useMapEvents({ click: event => onChange({ latitude:event.latlng.lat, longitude:event.latlng.lng }) }); return null }
+  return <div className="manual-map"><MapContainer center={coordinates ? [coordinates.latitude,coordinates.longitude] : [4.5709,-74.2973]} zoom={coordinates ? 15 : 5} scrollWheelZoom>
+    <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
+    <ClickHandler/>{coordinates&&<Marker position={[coordinates.latitude,coordinates.longitude]}/>} 
+  </MapContainer><small>Toca el mapa para marcar la ubicación exacta.</small></div>
+}
+
 function LocationFields({ value, onChange, coordinates, setCoordinates }: { value: ApiLocation; onChange: (v: ApiLocation) => void; coordinates?: Coordinates; setCoordinates?: (v: Coordinates) => void }) {
-  const locate = () => navigator.geolocation?.getCurrentPosition(p => setCoordinates?.({ latitude:p.coords.latitude, longitude:p.coords.longitude }), () => alert('No fue posible obtener la ubicación. Revisa los permisos del navegador.'))
+  const [locationError,setLocationError]=useState('')
+  const locate = () => { setLocationError(''); requestCoordinates(value => setCoordinates?.(value), setLocationError) }
   const field = (key: keyof ApiLocation, placeholder: string, maxLength?: number) => <input required value={value[key] || ''} maxLength={maxLength} placeholder={placeholder} onChange={e => onChange({ ...value, [key]:e.target.value })}/>
-  return <div className="location-fields"><div>{field('departmentName','Departamento')}{field('departmentCode','Código DANE (2 dígitos)',2)}</div><div>{field('municipalityName','Municipio o distrito')}{field('municipalityCode','Código DANE (5 dígitos)',5)}</div>{field('locality','Barrio, vereda o localidad')}{setCoordinates&&<button type="button" className="outline full" onClick={locate}><Navigation/> {coordinates ? `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}` : 'Capturar ubicación GPS'}</button>}</div>
+  return <div className="location-fields"><div>{field('departmentName','Departamento')}{field('departmentCode','Código DANE (2 dígitos)',2)}</div><div>{field('municipalityName','Municipio o distrito')}{field('municipalityCode','Código DANE (5 dígitos)',5)}</div>{field('locality','Barrio, vereda o localidad')}{setCoordinates&&<><button type="button" className="outline full" onClick={locate}><Navigation/> {coordinates ? `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}` : 'Usar ubicación GPS'}</button>{locationError&&<div className="location-error" role="alert"><AlertTriangle/>{locationError}</div>}<LocationPicker coordinates={coordinates} onChange={value=>{setLocationError('');setCoordinates(value)}}/></>}</div>
 }
 
 function SafetyPage({ close }: { close: () => void }) {
@@ -103,10 +128,10 @@ function PeoplePage({ close }: { close: () => void }) {
   </main>
 }
 
-export default function App(){const[view,setView]=useState<View>('home'),[filter,setFilter]=useState<'all'|'urgent'|'resources'>('all'),[incidents,setIncidents]=useState<Incident[]>([]),[loading,setLoading]=useState(true),[online,setOnline]=useState(false),[coordinates,setCoordinates]=useState<Coordinates>()
+export default function App(){const[view,setView]=useState<View>('home'),[filter,setFilter]=useState<'all'|'urgent'|'resources'>('all'),[incidents,setIncidents]=useState<Incident[]>([]),[loading,setLoading]=useState(true),[online,setOnline]=useState(false),[coordinates,setCoordinates]=useState<Coordinates>(),[locationError,setLocationError]=useState('')
   const load=useCallback(async()=>{setLoading(true);try{const[data]=await Promise.all([api.incidents(),api.health()]);setIncidents(data.map(mapIncident));setOnline(true)}catch{setOnline(false)}finally{setLoading(false)}},[])
   useEffect(()=>{void load()},[load]);const visible=useMemo(()=>incidents.filter(i=>filter==='all'||(filter==='urgent'?['help','damage','landslide'].includes(i.kind):['water','medical','shelter','aid'].includes(i.kind))),[filter,incidents])
-  const locate=()=>navigator.geolocation?.getCurrentPosition(p=>{setCoordinates({latitude:p.coords.latitude,longitude:p.coords.longitude});setView('report')},()=>alert('No fue posible obtener tu ubicación.'))
+  const locate=()=>{setLocationError('');requestCoordinates(value=>{setCoordinates(value);setView('report')},setLocationError)}
   const created=(item:ApiIncident)=>{setIncidents(current=>[mapIncident(item),...current]);setOnline(true)}
   if(view==='safety')return <div className="app"><Header onHome={()=>setView('home')} online={online}/><SafetyPage close={()=>setView('home')}/><footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p></footer></div>
-  return <div className="app"><Header onHome={()=>setView('home')} online={online}/>{view==='report'?<ReportForm close={()=>setView('home')} onCreated={created} initialCoordinates={coordinates}/>:view==='people'?<PeoplePage close={()=>setView('home')}/>:<><Hero setView={setView}/><button className="location global-location" onClick={locate}><MapPin size={17}/> Usar mi ubicación para reportar <span>›</span></button><nav className="quick-actions"><button onClick={()=>setView('people')}><UserRoundSearch/><span><b>Buscar persona</b><small>Desaparecidos y localizados</small></span></button><button onClick={()=>setView('report')}><House/><span><b>Reportar daño</b><small>Viviendas, vías y servicios</small></span></button></nav><div className="filterbar"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>Todos</button><button className={filter==='urgent'?'active':''} onClick={()=>setFilter('urgent')}>Urgentes</button><button className={filter==='resources'?'active':''} onClick={()=>setFilter('resources')}>Ayuda disponible</button></div><MapPanel items={visible} onLocate={locate}/><Feed items={visible} loading={loading} onAll={()=>setFilter('all')}/><section className="public-note"><CircleHelp/><div><b>Plataforma ciudadana, no oficial</b><p>La información debe contrastarse con autoridades. En una emergencia inmediata, llama al <strong>123</strong>.</p></div></section></>}<footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p><span><Users size={15}/> Hecho en comunidad</span></footer></div>}
+  return <div className="app"><Header onHome={()=>setView('home')} online={online}/>{view==='report'?<ReportForm close={()=>setView('home')} onCreated={created} initialCoordinates={coordinates}/>:view==='people'?<PeoplePage close={()=>setView('home')}/>:<><Hero setView={setView}/><button className="location global-location" onClick={locate}><MapPin size={17}/> Usar mi ubicación para reportar <span>›</span></button>{locationError&&<div className="location-error home-location-error" role="alert"><AlertTriangle/><span>{locationError}<button onClick={()=>setView('report')}>Seleccionar en el mapa</button></span></div>}<nav className="quick-actions"><button onClick={()=>setView('people')}><UserRoundSearch/><span><b>Buscar persona</b><small>Desaparecidos y localizados</small></span></button><button onClick={()=>setView('report')}><House/><span><b>Reportar daño</b><small>Viviendas, vías y servicios</small></span></button></nav><div className="filterbar"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>Todos</button><button className={filter==='urgent'?'active':''} onClick={()=>setFilter('urgent')}>Urgentes</button><button className={filter==='resources'?'active':''} onClick={()=>setFilter('resources')}>Ayuda disponible</button></div><MapPanel items={visible} onLocate={locate}/><Feed items={visible} loading={loading} onAll={()=>setFilter('all')}/><section className="public-note"><CircleHelp/><div><b>Plataforma ciudadana, no oficial</b><p>La información debe contrastarse con autoridades. En una emergencia inmediata, llama al <strong>123</strong>.</p></div></section></>}<footer><div className="brand-mark">CR</div><p>Colombia Responde<br/><small>Tecnología abierta para ayudarnos.</small></p><span><Users size={15}/> Hecho en comunidad</span></footer></div>}
