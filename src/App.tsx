@@ -33,6 +33,8 @@ const kindMeta: Record<ReportKind, { label: string; icon: typeof Siren; tone: st
   aid: { label: 'Punto de ayuda', icon: PackageOpen, tone: 'green' },
 }
 const markerGlyph:Record<ReportKind,string>={help:'!',damage:'⌂',landslide:'▲',road:'━',water:'●',power:'⚡',medical:'✚',shelter:'⌂',aid:'◆'}
+const locationMarkerIcon=divIcon({className:'leaflet-location-icon',html:'<span><i>●</i></span>',iconSize:[34,42],iconAnchor:[17,40],popupAnchor:[0,-38]})
+const selectedMarkerIcon=divIcon({className:'leaflet-location-icon selected',html:'<span><i>✓</i></span>',iconSize:[34,42],iconAnchor:[17,40]})
 
 const blankLocation: ApiLocation = { departmentName: '', municipalityName: '', locality: '' }
 const timeAgo = (date: string) => new Intl.RelativeTimeFormat('es', { numeric: 'auto' }).format(-Math.max(1, Math.round((Date.now() - new Date(date).getTime()) / 60000)), 'minute')
@@ -85,7 +87,7 @@ function MapPanel({ items, onLocate, userCoordinates }: { items: Incident[]; onL
   return <section className="map-card"><div className="map-head"><div><span className="section-kicker">SITUACIÓN ACTUAL</span><h2>Mapa ciudadano</h2></div><span className="region"><MapPin size={15}/> Colombia <ChevronDown size={14}/></span></div>
     <div className="map-canvas leaflet-map"><MapContainer center={[4.5709,-74.2973]} zoom={5} minZoom={4} scrollWheelZoom={false}>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
-      <MapRecenter coordinates={userCoordinates}/>{userCoordinates&&<Marker position={[userCoordinates.latitude,userCoordinates.longitude]}><Popup><b>Tu ubicación aproximada</b></Popup></Marker>}
+      <MapRecenter coordinates={userCoordinates}/>{userCoordinates&&<Marker icon={locationMarkerIcon} position={[userCoordinates.latitude,userCoordinates.longitude]}><Popup><b>Tu ubicación aproximada</b></Popup></Marker>}
       {items.map(item => { const meta=kindMeta[item.kind]; return <Marker key={item.id} position={[item.latitude,item.longitude]} icon={divIcon({className:'leaflet-report-icon',html:`<span class="leaflet-marker ${meta.tone}"><i>${markerGlyph[item.kind]}</i></span>`,iconSize:[38,46],iconAnchor:[19,44],popupAnchor:[0,-42]})}><Popup><b>{meta.label}</b><br/>{item.title}<br/>{item.place}<br/><small>{item.time} · {item.verification==='official'?'Fuente oficial':'Reporte ciudadano'}</small></Popup></Marker> })}
     </MapContainer>{!items.length&&<div className="empty-map">No hay reportes para este filtro</div>}<button className="locate" onClick={onLocate} aria-label="Obtener ubicación"><Navigation size={18}/></button></div>
     <div className="legend"><span><i className="dot red"/> Urgente</span><span><i className="dot orange"/> Daño</span><span><i className="dot green"/> Recurso</span></div></section>
@@ -101,7 +103,7 @@ function LocationPicker({ coordinates, onChange }: { coordinates?: Coordinates; 
   function ClickHandler() { useMapEvents({ click: event => onChange({ latitude:event.latlng.lat, longitude:event.latlng.lng }) }); return null }
   return <div className="manual-map"><MapContainer center={coordinates ? [coordinates.latitude,coordinates.longitude] : [4.5709,-74.2973]} zoom={coordinates ? 15 : 5} scrollWheelZoom>
     <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
-    <ClickHandler/>{coordinates&&<Marker position={[coordinates.latitude,coordinates.longitude]}/>} 
+    <ClickHandler/>{coordinates&&<Marker icon={selectedMarkerIcon} position={[coordinates.latitude,coordinates.longitude]}/>} 
   </MapContainer><small>Toca el mapa para marcar la ubicación exacta.</small></div>
 }
 
