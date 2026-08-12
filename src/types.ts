@@ -42,6 +42,8 @@ export interface Incident {
   kind: ReportKind
   title: string
   place: string
+  municipality: string
+  locality?: string
   description: string
   time: string
   createdAt: string
