@@ -82,7 +82,7 @@ function Header({ onHome, onEmergency, online }: { onHome: () => void; onEmergen
   </header>
 }
 
-const tickerMessage=<><b>Información ciudadana:</b> Gracias por la colaboración. La mayoría de los puntos reportan insumos suficientes. Las necesidades que aún podrían presentarse son carpas y colchonetas; confirma directamente con cada punto antes de desplazarte o realizar una donación.</>
+const tickerMessage=<><b>Se necesitan relevos:</b> Con el comienzo de un nuevo día, las fuerzas de quienes llevan horas ayudando se agotan. Si estás descansado, tienes energía y estás preparado para colaborar, consulta en el mapa los puntos que aún solicitan personas y confirma la necesidad antes de desplazarte. Tu relevo permitirá que quienes ya están trabajando puedan descansar.</>
 const childSafetyMessage=<><b>Protección de niñas y niños:</b> No permitas que una persona sin identificación clara se lleve a un menor. Verifica su parentesco o autorización con los responsables del punto y, ante cualquier duda, informa inmediatamente a las autoridades.</>
 function TickerLine({message,className='',label}:{message:React.ReactNode;className?:string;label:string}){return <aside className={`info-ticker ${className}`} role="status" aria-label={label}><div className="info-ticker-track"><span>{message}</span><span aria-hidden="true">{message}</span></div></aside>}
 function InfoTicker(){return <><TickerLine message={tickerMessage} label="Información ciudadana"/><TickerLine message={childSafetyMessage} label="Alerta de protección infantil" className="child-safety-ticker"/></>}
