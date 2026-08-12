@@ -18,6 +18,16 @@ export interface ApiIncident {
   location: ApiLocation
   coordinates: { type: 'Point'; coordinates: [number, number] }
   area?: AreaPoint[]
+  sourceName?: string
+  sourceUrl?: string
+  externalId?: string
+  sourceUpdatedAt?: string
+  sourceData?: {
+    sourceState?:string;sourceType?:string;needs?:string[];contact?:string;notes?:string
+    confirmations?:number;denials?:number;sourceVerified?:boolean;fresh?:boolean
+    volunteersAvailable?:number;volunteersNeeded?:number
+    media?:Array<{url?:string;mime?:string;caption?:string;timestamp?:number}>
+  }
   peopleAtRisk?: number
   verificationStatus: Verification
   confirmationCount: number
