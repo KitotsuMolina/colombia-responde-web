@@ -44,6 +44,7 @@ export interface Incident {
   place: string
   description: string
   time: string
+  createdAt: string
   verification: Verification
   x: number
   y: number
