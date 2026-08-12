@@ -23,7 +23,7 @@ export interface ApiIncident {
   externalId?: string
   sourceUpdatedAt?: string
   sourceData?: {
-    sourceState?:string;sourceType?:string;needs?:string[];contact?:string;notes?:string
+    sourceState?:string;sourceType?:string;saturation?:string;needs?:string[];contact?:string;notes?:string
     confirmations?:number;denials?:number;sourceVerified?:boolean;fresh?:boolean
     volunteersAvailable?:number;volunteersNeeded?:number
     media?:Array<{url?:string;mime?:string;caption?:string;timestamp?:number}>
@@ -45,6 +45,8 @@ export interface Incident {
   description: string
   time: string
   createdAt: string
+  noAttend?: boolean
+  needsPeople?: boolean
   verification: Verification
   x: number
   y: number
@@ -54,7 +56,7 @@ export interface Incident {
   area?: AreaPoint[]
 }
 export interface IncidentEvidence { id:string;url:string;mimeType:string;sizeBytes:number;createdAt:string }
-export interface ApiIncidentDetail extends ApiIncident { evidence:IncidentEvidence[] }
+export interface ApiIncidentDetail extends ApiIncident { evidence:IncidentEvidence[];sourceLog?:Array<{text:string;author?:string;timestamp:number}> }
 
 export interface ApiMissingPerson {
   id: string
