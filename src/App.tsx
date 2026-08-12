@@ -59,7 +59,7 @@ function IncidentMarkers({items,onSelect}:{items:Incident[];onSelect:(id:string)
 
 const blankLocation: ApiLocation = { departmentName: '', municipalityName: '', locality: '' }
 const compressImage=async(file:File)=>{const bitmap=await createImageBitmap(file),scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height)),canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);canvas.getContext('2d')!.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();return new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('No fue posible procesar la foto')),'image/webp',.8))}
-const timeAgo = (date: string) => {const minutes=Math.max(1,Math.round((Date.now()-new Date(date).getTime())/60000)),formatter=new Intl.RelativeTimeFormat('es',{numeric:'auto'});if(minutes<60)return formatter.format(-minutes,'minute');const hours=Math.round(minutes/60);if(hours<24)return formatter.format(-hours,'hour');return formatter.format(-Math.round(hours/24),'day')}
+const timeAgo = (date: string) => {const minutes=Math.max(1,Math.floor((Date.now()-new Date(date).getTime())/60000));if(minutes<60)return `hace ${minutes} min`;const hours=Math.floor(minutes/60),remainingMinutes=minutes%60;if(hours<24)return `hace ${hours} h${remainingMinutes?` ${remainingMinutes} min`:''}`;const days=Math.floor(hours/24),remainingHours=hours%24;return `hace ${days} día${days===1?'':'s'}${remainingHours?` y ${remainingHours} h`:''}`}
 const mapIncident = (item: ApiIncident): Incident => {
   const [longitude, latitude] = item.coordinates.coordinates
   return { sourceId:item.id,id: item.id.slice(0, 8).toUpperCase(), kind: item.kind, title: item.title, description: item.description,
