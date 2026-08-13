@@ -1,4 +1,4 @@
-import type { ApiIncident, ApiIncidentDetail, ApiLocation, ApiMissingPerson, ApiSafetyCheckIn, AreaPoint, CitizenAction, IncidentEvidence, ReportKind } from '../types'
+import type { AnalyticsData, ApiIncident, ApiIncidentDetail, ApiLocation, ApiMissingPerson, ApiSafetyCheckIn, AreaPoint, CitizenAction, IncidentEvidence, ReportKind } from '../types'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 export const incidentStreamUrl = `${API_BASE_URL}/incidents/stream`
@@ -25,6 +25,7 @@ export const api = {
     longitude: number; latitude: number; peopleAtRisk?: number
   }) => request<ApiIncident>('/incidents', { method: 'POST', body: JSON.stringify(payload) }),
   adminCreateIncident:(token:string,payload:{kind:ReportKind;title:string;description:string;location:ApiLocation;longitude:number;latitude:number;peopleAtRisk?:number;area?:AreaPoint[]})=>request<ApiIncident>('/admin/incidents',{method:'POST',headers:{Authorization:`Bearer ${token}`},body:JSON.stringify(payload)}),
+  adminAnalytics:(token:string)=>request<AnalyticsData>('/admin/analytics',{headers:{Authorization:`Bearer ${token}`}}),
   citizenActions:()=>request<CitizenAction[]>('/citizen-actions'),
   citizenAction:(id:string)=>request<CitizenAction>(`/citizen-actions/${id}`),
   citizenActionValidation:(token:string)=>request<CitizenAction>(`/citizen-actions/validate/${encodeURIComponent(token)}`),

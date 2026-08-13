@@ -112,3 +112,4 @@ export interface CitizenAction {
   createdAt:string
   updatedAt:string
 }
+export interface AnalyticsData {generatedAt:string;scope:string;summary:{total:number;attended:number;pending:number;unknown:number;responseRate:number|null};pendingAge:{under1:number;from1to3:number;from3to6:number;from6to12:number;over12:number};cities:Array<{name:string;total:number;attended:number;pending:number;unknown:number;responseRate:number|null}>;needs:Array<{label:string;count:number}>;hourly:Array<{hour:string;created:number}>;methodology:{attended:string;pending:string;unknown:string;responseTimesAvailable:boolean;responseTimesNote:string}}
