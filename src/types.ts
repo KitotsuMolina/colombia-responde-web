@@ -24,7 +24,7 @@ export interface ApiIncident {
   sourceUpdatedAt?: string
   sourceData?: {
     sourceState?:string;sourceType?:string;saturation?:string;needs?:string[];contact?:string;notes?:string
-    confirmations?:number;denials?:number;sourceVerified?:boolean;fresh?:boolean
+    confirmations?:number;denials?:number;sourceVerified?:boolean;fresh?:boolean;confirmedAt?:number
     volunteersAvailable?:number;volunteersNeeded?:number
     media?:Array<{url?:string;mime?:string;caption?:string;timestamp?:number}>
   }
@@ -49,6 +49,8 @@ export interface Incident {
   createdAt: string
   noAttend?: boolean
   needsPeople?: boolean
+  staleHours?: number
+  fadeExempt?: boolean
   verification: Verification
   x: number
   y: number
